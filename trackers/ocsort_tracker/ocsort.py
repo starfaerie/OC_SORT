@@ -199,7 +199,7 @@ class OCSort(object):
         NOTE: The number of objects returned may differ from the number of detections provided.
         """
         if output_results is None:
-            return np.empty((0, 5))
+            return np.empty((0, 5)), {}
 
         self.frame_count += 1
         # post_process detections
@@ -245,8 +245,10 @@ class OCSort(object):
         """
         matched, unmatched_dets, unmatched_trks = associate(
             dets, trks, self.iou_threshold, velocities, k_observations, self.inertia)
+        det_to_id = {}
         for m in matched:
             self.trackers[m[1]].update(dets[m[0], :])
+            det_to_id[int(m[0])] = self.trackers[m[1]].id
 
         """
             Second round of associaton by OCR
@@ -291,6 +293,7 @@ class OCSort(object):
                     if iou_left[m[0], m[1]] < self.iou_threshold:
                         continue
                     self.trackers[trk_ind].update(dets[det_ind, :])
+                    det_to_id[int(det_ind)] = self.trackers[trk_ind].id
                     to_remove_det_indices.append(det_ind)
                     to_remove_trk_indices.append(trk_ind)
                 unmatched_dets = np.setdiff1d(unmatched_dets, np.array(to_remove_det_indices))
@@ -303,6 +306,7 @@ class OCSort(object):
         for i in unmatched_dets:
             trk = KalmanBoxTracker(dets[i, :], delta_t=self.delta_t)
             self.trackers.append(trk)
+            det_to_id[int(i)] = trk.id
         i = len(self.trackers)
         for trk in reversed(self.trackers):
             if trk.last_observation.sum() < 0:
@@ -321,8 +325,8 @@ class OCSort(object):
             if(trk.time_since_update > self.max_age):
                 self.trackers.pop(i)
         if(len(ret) > 0):
-            return np.concatenate(ret)
-        return np.empty((0, 5))
+            return np.concatenate(ret), det_to_id
+        return np.empty((0, 5)), det_to_id
 
     def update_public(self, dets, cates, scores):
         self.frame_count += 1
